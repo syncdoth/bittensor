@@ -59,6 +59,7 @@ def show_delegates(
     do_print: bool = True,
     topk: int = 10,
     filter_below: float = None,
+    show_registration: bool = False,
 ):
     """Pretty prints a table of delegates sorted by total stake."""
     delegates.sort(key=lambda delegate: delegate.total_stake, reverse=True)
@@ -108,10 +109,11 @@ def show_delegates(
         no_wrap=True,
     )
     table.add_column("[overline white]CHANGE/(4h)", style="grey0", justify="center")
-    table.add_column(
-        "[overline white]SUBNETS", justify="right", style="white", no_wrap=True
-    )
-    table.add_column("[overline white]VPERMIT", justify="right", no_wrap=True)
+    if show_registration:
+        table.add_column(
+            "[overline white]SUBNETS", justify="right", style="white", no_wrap=False
+        )
+        table.add_column("[overline white]VPERMIT", justify="right", no_wrap=False)
     # table.add_column("[overline white]TAKE", style='white', no_wrap=True)
     table.add_column("[overline white]TOTAL REWARD", style='green', justify='center')
     table.add_column(
@@ -178,6 +180,17 @@ def show_delegates(
             delegate.total_daily_return.tao,
             reward,
         ]
+        registration_info = []
+        if show_registration:
+            registration_info = [
+                str(delegate.registrations),
+                str(
+                    [
+                        "*" if subnet in delegate.validator_permits else ""
+                        for subnet in delegate.registrations
+                    ]
+                ),
+            ]
         row = [
             str(i),
             Text(delegate_name, style=f"link {delegate_url}"),
@@ -186,13 +199,7 @@ def show_delegates(
             f"{owner_stake!s:13.13}",
             f"{delegate.total_stake!s:13.13}",
             rate_change_in_stake_str,
-            str(delegate.registrations),
-            str(
-                [
-                    "*" if subnet in delegate.validator_permits else ""
-                    for subnet in delegate.registrations
-                ]
-            ),
+            *registration_info,
             f"{delegate.total_daily_return.tao!s:6.6}",
             # f'{delegate.take * 100:.1f}%',
             f'{reward!s:6.6}',
@@ -485,12 +492,18 @@ class ListDelegatesCommand:
             delegates,
             prev_delegates=prev_delegates,
             width=cli.config.get("width", None),
+            show_registration=cli.config.get("show_registration", False),
         )
 
     @staticmethod
     def add_args(parser: argparse.ArgumentParser):
         list_delegates_parser = parser.add_parser(
             "list_delegates", help="""List all delegates on the network"""
+        )
+        list_delegates_parser.add_argument(
+            "--show_registration",
+            help="""Show registration info""",
+            action="store_true",
         )
         bittensor.subtensor.add_args(list_delegates_parser)
 
@@ -572,6 +585,8 @@ class MyDelegatesCommand:
             wallets = [bittensor.wallet(config=config)]
         subtensor: bittensor.subtensor = bittensor.subtensor(config=config)
 
+        show_registration = config.get("show_registration", False)
+
         table = Table(show_footer=True, pad_edge=False, box=None, expand=True)
         table.add_column(
             "[overline white]Wallet", footer_style="overline white", style="bold white"
@@ -607,10 +622,11 @@ class MyDelegatesCommand:
             style="green",
             no_wrap=True,
         )
-        table.add_column(
-            "[overline white]SUBNETS", justify="right", style="white", no_wrap=True
-        )
-        table.add_column("[overline white]VPERMIT", justify="right", no_wrap=True)
+        if show_registration:
+            table.add_column(
+                "[overline white]SUBNETS", justify="right", style="white", no_wrap=False
+            )
+            table.add_column("[overline white]VPERMIT", justify="right", no_wrap=False)
         table.add_column("[overline white]TOTAL RETURN", style='green', justify='center')
         table.add_column("[overline white]24h/k\u03C4", style="green", justify="center")
         table.add_column("[overline white]Desc", style="rgb(50,163,219)")
@@ -673,6 +689,19 @@ class MyDelegatesCommand:
                 if delegate[0].hotkey_ss58 in my_delegates:
                     delegate_amount = my_delegates[delegate[0].hotkey_ss58]
                     emission = delegate[0].total_daily_return.tao * (delegate_amount/delegate[0].total_stake.tao)
+                    registration_info = []
+                    if show_registration:
+                        registration_info = [
+                            str(delegate[0].registrations),
+                            str(
+                                [
+                                    "*"
+                                    if subnet in delegate[0].validator_permits
+                                    else ""
+                                    for subnet in delegate[0].registrations
+                                ]
+                            ),
+                        ]
                     table.add_row(
                         wallet.name,
                         Text(delegate_name, style=f"link {delegate_url}"),
@@ -682,13 +711,7 @@ class MyDelegatesCommand:
                         str(len(delegate[0].nominators)),
                         f"{owner_stake!s:13.13}",
                         f"{delegate[0].total_stake!s:13.13}",
-                        str(delegate[0].registrations),
-                        str(
-                            [
-                                "*" if subnet in delegate[0].validator_permits else ""
-                                for subnet in delegate[0].registrations
-                            ]
-                        ),
+                        *registration_info,
                         # f'{delegate.take * 100:.1f}%',s
                         f"{delegate[0].total_daily_return.tao!s:6.6}",
                         f"{ delegate[0].total_daily_return.tao * ( 1000 / ( 0.001 + delegate[0].total_stake.tao ) )!s:6.6}",
@@ -743,6 +766,11 @@ class MyDelegatesCommand:
             action="store_true",
             help="""Check all coldkey wallets.""",
             default=False,
+        )
+        delegate_stake_parser.add_argument(
+            "--show_registration",
+            help="""Show registration info""",
+            action="store_true",
         )
         bittensor.wallet.add_args(delegate_stake_parser)
         bittensor.subtensor.add_args(delegate_stake_parser)
