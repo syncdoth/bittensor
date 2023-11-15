@@ -493,6 +493,7 @@ class ListDelegatesCommand:
             prev_delegates=prev_delegates,
             width=cli.config.get("width", None),
             show_registration=cli.config.get("show_registration", False),
+            topk=20,
         )
 
     @staticmethod
@@ -850,27 +851,33 @@ class OptimalDelegatesCommand:
 
             stake_amount, estimated_reward = optimal_staking( amount, daily_returns, other_stakes, steps=config.steps, lr=config.lr )
 
-            delegate_info.append((indices, addresses, stake_amount, estimated_reward))
+            delegate_info.append((indices, addresses, other_stakes, daily_returns, stake_amount, estimated_reward))
 
         table = Table(show_footer=True, pad_edge=False, box=None, expand=True)
         table.add_column("[overline white]Wallet", footer_style = "overline white", style='bold white')
         table.add_column("[overline white]INDEX", footer_style = "overline white", style='bold white')
         table.add_column("[overline white]SS58", footer_style = "overline white", style='bold yellow')
+        table.add_column("[overline white]Total Stake", footer_style = "overline white", style='bold yellow')
+        table.add_column("[overline white]Daily Return", footer_style = "overline white", style='bold yellow')
         table.add_column("[overline green]Optimal Del. Amnt", footer_style = "overline green", style='bold green')
         table.add_column("[overline green]\u03C4/24h", footer_style = "overline green", style='bold green')
 
         best_idx = max(range(len(delegate_info)), key=lambda i: sum(delegate_info[i][-1]))
-        indices, addresses, stake_amount, estimated_reward = delegate_info[best_idx]
-        for idx, addr, amnt, reward in sorted(zip(indices, addresses, stake_amount, estimated_reward), key=lambda x: x[0]):
+        indices, addresses, total_stakes, daily_returns, stake_amount, estimated_reward = delegate_info[best_idx]
+        for idx, addr, stake, returns, amnt, reward in sorted(zip(indices, addresses, total_stakes, daily_returns, stake_amount, estimated_reward), key=lambda x: x[0]):
             table.add_row(wallet.name,
                           str(idx),
                           f'{addr}',
+                          f'{stake}',
+                          f'{returns}',
                           f'{amnt!s:13.13}',
                           f'{reward!s:6.6}')
 
         table.add_row(*["-" * 8] * len(table.columns))  # empty line
         table.add_row(
             'total',
+            '',
+            '',
             '',
             '',
             f'{sum(stake_amount)!s:13.13}',
