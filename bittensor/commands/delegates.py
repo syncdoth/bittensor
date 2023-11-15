@@ -794,13 +794,21 @@ class OptimalDelegatesCommand:
         '''Compute Optimal delegate amount for top-k accounts.'''
         config = cli.config.copy()
         wallets = _get_coldkey_wallets_for_path( config.wallet.path )
-        config.topk = [int(x) for x in config.topk.split(',')]
+        config.topk = sorted([int(x) for x in config.topk.split(',')])
 
         # list part
         subtensor: bittensor.Subtensor = bittensor.subtensor( config = config )
         with bittensor.__console__.status(":satellite: Loading delegates..."):
             delegates: bittensor.DelegateInfo = subtensor.get_delegates()
-            prev_delegates = subtensor.get_delegates(max(0, subtensor.block - 1200))
+            try:
+                prev_delegates = subtensor.get_delegates(max(0, subtensor.block - 1200))
+            except SubstrateRequestException:
+                prev_delegates = None
+
+        if prev_delegates is None:
+            bittensor.__console__.print(
+                ":warning: [yellow]Could not fetch delegates history[/yellow]"
+            )
 
         my_delegates = {} # hotkey, amount
         total_balance = 0
@@ -820,25 +828,26 @@ class OptimalDelegatesCommand:
                         total_balance += staked.tao
 
         delegate_info = []
-        for k in tqdm(config.topk, desc='topks'):
-            top_candidates = show_delegates(delegates, prev_delegates = prev_delegates, width = cli.config.get('width', None),
-                                            topk=k, do_print=False, filter_below=cli.config.get("filter_below"))
+        largest_k = config.topk[-1]
+        top_candidates = show_delegates(delegates, prev_delegates = prev_delegates, width = cli.config.get('width', None),
+                                        topk=largest_k, do_print=False, filter_below=cli.config.get("filter_below"))
 
-            daily_returns = []
-            other_stakes = []
-            addresses = []
-            indices = []
-            for candidate in top_candidates:
-                index, hotkey_ss58, total_stake, total_daily_return, _ = candidate[-1]
-                addresses.append(hotkey_ss58)
-                daily_returns.append(total_daily_return)
-                indices.append(index)
-                if hotkey_ss58 in my_delegates:
-                    other_stakes.append(total_stake - my_delegates[hotkey_ss58])
-                else:
-                    other_stakes.append(total_stake)
+        amount = config.amount if config.amount > 0 else total_balance
 
-            amount = config.amount if config.amount > 0 else total_balance
+        daily_returns = []
+        other_stakes = []
+        addresses = []
+        indices = []
+        for candidate in tqdm(top_candidates, desc='topks'):
+            index, hotkey_ss58, total_stake, total_daily_return, _ = candidate[-1]
+            addresses.append(hotkey_ss58)
+            daily_returns.append(total_daily_return)
+            indices.append(index)
+            if hotkey_ss58 in my_delegates:
+                other_stakes.append(total_stake - my_delegates[hotkey_ss58])
+            else:
+                other_stakes.append(total_stake)
+
             stake_amount, estimated_reward = optimal_staking( amount, daily_returns, other_stakes, steps=config.steps, lr=config.lr )
 
             delegate_info.append((indices, addresses, stake_amount, estimated_reward))
