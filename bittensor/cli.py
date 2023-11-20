@@ -72,6 +72,7 @@ COMMANDS = {
             "delegate": DelegateStakeCommand,
             "undelegate": DelegateUnstakeCommand,
             "my_delegates": MyDelegatesCommand,
+            "optimal_delegates": OptimalDelegatesCommand,
             "list_delegates": ListDelegatesCommand,
             "nominate": NominateCommand,
         },
